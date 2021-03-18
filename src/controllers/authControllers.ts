@@ -10,7 +10,7 @@ import { CustomRequest, UserType } from "../types/authTypes";
 const createAccessToken = (user: UserType) => {
 	return sign(
 		{ _id: user._id, username: user.username, email: user.email },
-		process.env.ACCESS_TOKEN_SECRET ?? "",
+		process.env.ACCESS_TOKEN_SECRET as string,
 		{ expiresIn: "1h" }
 	);
 };
@@ -18,7 +18,7 @@ const createAccessToken = (user: UserType) => {
 const createRefreshToken = (user: UserType) => {
 	return sign(
 		{ _id: user._id, username: user.username, email: user.email },
-		process.env.REFRESH_TOKEN_SECRET ?? ""
+		process.env.REFRESH_TOKEN_SECRET as string
 	);
 };
 
@@ -29,7 +29,7 @@ const authMiddleware = async (
 	next: NextFunction
 ) => {
 	const token = req.headers["authorization"] as string;
-	const accessToken = token?.split(" ")[1];
+	const accessToken = token && token.split(" ")[1];
 
 	if (accessToken !== undefined) {
 		try {

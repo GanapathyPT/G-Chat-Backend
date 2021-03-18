@@ -14,11 +14,11 @@ const listUsers = async (req: Request, res: Response) => {
 const getFriends = async (req: Request, res: Response) => {
 	const currentUser = (req as CustomRequest).user;
 
-	const user = await User.findById(currentUser?._id);
-	if (user) {
+	const user = currentUser && (await User.findById(currentUser._id));
+	if (user && user.friends) {
 		const friends = await User.find({
 			_id: {
-				$in: user.friends?.map((friend) => friend.userId),
+				$in: user.friends.map((friend) => friend.userId),
 			},
 		});
 		return res.status(200).json({
@@ -40,7 +40,7 @@ const getUser = async (req: Request, res: Response) => {
 	const currentUser = (req as CustomRequest).user;
 
 	const searchParam = req.query.q;
-	if (searchParam) {
+	if (searchParam && currentUser) {
 		const users = await User.find({
 			$or: [
 				{
@@ -59,7 +59,7 @@ const getUser = async (req: Request, res: Response) => {
 		});
 		return res.json({
 			result: users
-				.filter((user) => user._id !== currentUser?._id)
+				.filter((user) => user._id !== currentUser._id)
 				.map((user) => ({
 					_id: user._id,
 					username: user.username,
@@ -80,7 +80,7 @@ const addFriend = async (req: Request, res: Response) => {
 	if (currentUser) {
 		const user = await User.findById(currentUser._id);
 		const friend = await User.findById(newFriend);
-		if (user && friend) {
+		if (user && friend && user.friends && friend.friends) {
 			// creating a new Room for the user and his newFriend
 			const room = await new Room({
 				users: [user._id, friend._id],
@@ -88,10 +88,10 @@ const addFriend = async (req: Request, res: Response) => {
 				name: `${user.username}__${friend.username}`,
 			}).save();
 
-			user.friends?.push({ userId: friend._id, roomId: room._id });
+			user.friends.push({ userId: friend._id, roomId: room._id });
 			await user.save();
 
-			friend.friends?.push({ userId: user._id, roomId: room._id });
+			friend.friends.push({ userId: user._id, roomId: room._id });
 			await friend.save();
 
 			return res.status(200).json({
