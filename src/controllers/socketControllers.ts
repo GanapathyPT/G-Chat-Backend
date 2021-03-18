@@ -31,6 +31,14 @@ const getMessages = async (socket: Socket, roomId: ObjectId) => {
 	});
 };
 
+/**
+ * add new message to the db and send the same to all the users inthe room
+ * @param io -> io object
+ * @param socket -> socket object
+ * @roomId -> room to send the message
+ * @author -> author of the message
+ * @message -> original message text
+ */
 const addNewMessage = async ({
 	io,
 	socket,
@@ -55,7 +63,6 @@ const addNewMessage = async ({
 	if (room) {
 		room.messages.push(newMessage);
 		await room.save();
-		// socket.emit("newMessage", { newMessage });
 		return io.to(room.name).emit("newMessage", { newMessage });
 	}
 	return socket.emit("alert", {

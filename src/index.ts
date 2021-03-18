@@ -38,10 +38,6 @@ connect(
 
 // socket connections
 io.on("connection", (socket: Socket) => {
-	socket.on("joinAllRoom", ({ rooms }: { rooms: string[] }) => {
-		// rooms && socket.join(rooms);
-	});
-
 	socket.on("getMessages", ({ roomId }: { roomId: ObjectId }) =>
 		getMessages(socket, roomId)
 	);
@@ -69,6 +65,9 @@ expressApp.use(json());
 // registering all the routes
 expressApp.use("/api/auth", authRouter);
 expressApp.use("/api/user", userRouter);
+
+// sending frontend files
+expressApp.use("/", express.static("public"));
 
 server.listen(PORT, () => {
 	console.log(`Server Started at Port, ${PORT}`);
