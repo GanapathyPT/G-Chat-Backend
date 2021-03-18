@@ -14,7 +14,7 @@ const authRouter = Router();
 authRouter.post(
 	"/register",
 	// validations
-	body("username").isAlpha().isLength({ max: 50, min: 4 }),
+	body("username").isLength({ max: 50, min: 4 }),
 	body("email").isEmail(),
 	body("password").isStrongPassword({
 		minLength: 3,
