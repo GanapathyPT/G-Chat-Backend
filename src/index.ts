@@ -23,7 +23,7 @@ const io = new Server(server, {
 		origin: "*",
 	},
 });
-const PORT = process.env.PORT as string;
+const PORT = process.env.PORT as number;
 connect(
 	process.env.MONGODB_URL as string,
 	{
