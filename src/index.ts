@@ -23,7 +23,7 @@ const io = new Server(server, {
 		origin: "*",
 	},
 });
-const PORT = process.env.PORT as number;
+const PORT = process.env.PORT as string;
 connect(
 	process.env.MONGODB_URL as string,
 	{
@@ -69,6 +69,6 @@ expressApp.use("/api/user", userRouter);
 // sending frontend files
 expressApp.use("/", express.static("public"));
 
-server.listen(PORT, () => {
+server.listen(parseInt(PORT), () => {
 	console.log(`Server Started at Port, ${PORT}`);
 });
