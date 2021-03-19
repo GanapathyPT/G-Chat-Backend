@@ -31,7 +31,6 @@
 	},
 	"engines": {
 		"node": "14.x",
-		"yarn": "1.x",
-		"tsc": "2.x"
+		"yarn": "1.x"
 	}
 }

@@ -69,6 +69,6 @@ expressApp.use("/api/user", userRouter);
 // sending frontend files
 expressApp.use("/", express.static("public"));
 
-server.listen(parseInt(PORT), () => {
+server.listen(PORT, () => {
 	console.log(`Server Started at Port, ${PORT}`);
 });
