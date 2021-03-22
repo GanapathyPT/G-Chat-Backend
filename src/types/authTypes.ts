@@ -6,7 +6,7 @@ export interface UserType extends Document {
 	_id: ObjectId;
 	email: string;
 	username: string;
-	password?: string;
+	password?: string | null;
 	friends?: [
 		{
 			userId: ObjectId;

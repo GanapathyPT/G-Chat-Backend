@@ -7,6 +7,7 @@ import {
 	register,
 	validationMiddleware,
 	logout,
+	googleAuth,
 } from "../controllers/authControllers";
 
 const authRouter = Router();
@@ -47,5 +48,7 @@ authRouter.post(
 );
 
 authRouter.get("/logout", authMiddleware, logout);
+
+authRouter.post("/googleAuth", googleAuth);
 
 export { authRouter };
