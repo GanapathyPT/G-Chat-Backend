@@ -9,6 +9,11 @@ import { CustomRequest, UserType } from "../types/authTypes";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID as string);
 
+interface Tokens {
+	refreshToken: string;
+	accessToken: string;
+}
+
 // auth utilities
 const createAccessToken = (user: UserType) => {
 	return sign(
@@ -23,6 +28,54 @@ const createRefreshToken = (user: UserType) => {
 		{ _id: user._id, username: user.username, email: user.email },
 		process.env.REFRESH_TOKEN_SECRET as string
 	);
+};
+
+const createTokensForUser = async (user: UserType): Promise<Tokens> => {
+	const accessToken = createAccessToken(user);
+	let refreshToken: string;
+
+	const oldToken = await Token.findOne({ user: user._id });
+	if (oldToken !== null) {
+		oldToken.token = createRefreshToken(user);
+		const { token } = await oldToken.save();
+		refreshToken = token;
+	} else {
+		const { token } = await new Token({
+			token: createRefreshToken(user),
+			user,
+		}).save();
+		refreshToken = token;
+	}
+
+	return {
+		accessToken,
+		refreshToken,
+	};
+};
+
+const registerNewuser = async (
+	username: string,
+	email: string,
+	password: string | null
+): Promise<Tokens> => {
+	const user: UserType = await new User({
+		username,
+		email,
+		password,
+	}).save();
+
+	const accessToken = createAccessToken(user);
+	const refreshToken = createRefreshToken(user);
+
+	await new Token({
+		user: user,
+		token: refreshToken,
+	}).save();
+
+	return {
+		accessToken,
+		refreshToken,
+	};
 };
 
 // middlewares
@@ -92,19 +145,11 @@ const register = async (req: Request, res: Response) => {
 
 		const salt: string = await genSalt(10);
 		const hashedPassword = await hash(password, salt);
-		const user: UserType = await new User({
+		const { accessToken, refreshToken } = await registerNewuser(
 			username,
 			email,
-			password: hashedPassword,
-		}).save();
-
-		const accessToken = createAccessToken(user);
-		const refreshToken = createRefreshToken(user);
-
-		await new Token({
-			user: user,
-			token: refreshToken,
-		}).save();
+			hashedPassword
+		);
 
 		res.status(201).json({
 			errors: null,
@@ -159,22 +204,7 @@ const login = async (req: Request, res: Response) => {
 				],
 			});
 
-		const accessToken = createAccessToken(user);
-		let refreshToken: string;
-
-		const oldToken = await Token.findOne({ user: user._id });
-		if (oldToken !== null) {
-			oldToken.token = createRefreshToken(user);
-			const { token } = await oldToken.save();
-			refreshToken = token;
-		} else {
-			const { token } = await new Token({
-				token: createRefreshToken(user),
-				user,
-			}).save();
-			refreshToken = token;
-		}
-
+		const { accessToken, refreshToken } = await createTokensForUser(user);
 		return res.status(200).json({
 			errors: null,
 			accessToken,
@@ -245,47 +275,30 @@ const googleAuth = async (req: Request, res: Response) => {
 		const user = await User.findOne({ email: email });
 		// login the user if user found
 		if (user) {
-			const accessToken = createAccessToken(user);
-			let refreshToken: string;
-
-			const oldToken = await Token.findOne({ user: user._id });
-			if (oldToken !== null) {
-				oldToken.token = createRefreshToken(user);
-				const { token } = await oldToken.save();
-				refreshToken = token;
-			} else {
-				const { token } = await new Token({
-					token: createRefreshToken(user),
-					user,
-				}).save();
-				refreshToken = token;
-			}
-
+			const { accessToken, refreshToken } = await createTokensForUser(
+				user
+			);
 			return res.status(200).json({
 				errors: null,
 				accessToken,
 				refreshToken,
 			});
 		}
-		// register a new user
-		const newUser: UserType = await new User({
-			username: name,
-			email,
-			password: null,
-		}).save();
-
-		const accessToken = createAccessToken(newUser);
-		const refreshToken = createRefreshToken(newUser);
-
-		await new Token({
-			user: newUser,
-			token: refreshToken,
-		}).save();
-
-		return res.status(201).json({
-			errors: null,
-			accessToken,
-			refreshToken,
+		if (name && email) {
+			// register a new user
+			const { refreshToken, accessToken } = await registerNewuser(
+				name,
+				email,
+				null
+			);
+			return res.status(201).json({
+				errors: null,
+				accessToken,
+				refreshToken,
+			});
+		}
+		return res.status(400).json({
+			error: "no name and password",
 		});
 	}
 	res.status(401).json({
