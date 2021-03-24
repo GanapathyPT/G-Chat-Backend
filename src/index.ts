@@ -44,13 +44,19 @@ io.on("connection", (socket: Socket) => {
 
 	socket.on(
 		"sendMessage",
-		(newMessage: { roomId: ObjectId; author: ObjectId; message: string }) =>
+		(newMessage: {
+			roomId: ObjectId;
+			author: ObjectId;
+			message: string;
+			time: string;
+		}) =>
 			addNewMessage({
 				io,
 				socket,
 				roomId: newMessage.roomId,
 				author: newMessage.author,
 				message: newMessage.message,
+				timestamp: new Date(newMessage.time),
 			})
 	);
 

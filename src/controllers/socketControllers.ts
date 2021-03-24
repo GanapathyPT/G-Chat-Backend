@@ -45,17 +45,20 @@ const addNewMessage = async ({
 	roomId,
 	author,
 	message,
+	timestamp,
 }: {
 	io: Server;
 	socket: Socket;
 	roomId: ObjectId;
 	author: ObjectId;
 	message: string;
+	timestamp: Date;
 }) => {
 	// creating a new message
 	const newMessage = await new Message({
 		author,
 		message,
+		timestamp,
 	}).save();
 
 	// add the message to the room
