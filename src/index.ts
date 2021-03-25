@@ -6,6 +6,7 @@ import { Server, Socket } from "socket.io";
 import { addNewMessage, getMessages } from "./controllers/socketControllers";
 import { authRouter } from "./routes/authRoutes";
 import { userRouter } from "./routes/userRoutes";
+import cors from "cors";
 
 // registering models for neglecting errors
 import { User } from "./models/userModel";
@@ -67,6 +68,11 @@ io.on("connection", (socket: Socket) => {
 
 // using express body parser
 expressApp.use(json());
+expressApp.use(
+	cors({
+		origin: "https://g-chat-messenger.netlify.app",
+	})
+);
 
 // registering all the routes
 expressApp.use("/api/auth", authRouter);
