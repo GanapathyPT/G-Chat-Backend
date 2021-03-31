@@ -13,6 +13,7 @@ export interface UserType extends Document {
 			roomId: ObjectId;
 		}
 	];
+	online: boolean;
 }
 
 export interface RelationType extends Document {

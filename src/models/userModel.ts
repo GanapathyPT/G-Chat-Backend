@@ -1,5 +1,5 @@
 import { Model, model, Schema } from "mongoose";
-import { RelationType, UserType } from "../types/authTypes";
+import { UserType } from "../types/authTypes";
 
 const UserSchema = new Schema({
 	username: {
@@ -27,6 +27,10 @@ const UserSchema = new Schema({
 			},
 		},
 	],
+	online: {
+		type: Boolean,
+		default: false,
+	},
 	createdAt: {
 		type: Date,
 		default: Date.now,

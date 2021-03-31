@@ -26,6 +26,7 @@ const getFriends = async (req: Request, res: Response) => {
 				_id: friend._id,
 				email: friend.email,
 				username: friend.username,
+				online: friend.online,
 				roomId: user.friends && user.friends[index].roomId,
 			})),
 		});

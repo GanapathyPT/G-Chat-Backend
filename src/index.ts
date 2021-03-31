@@ -3,7 +3,11 @@ import express, { json } from "express";
 import { createServer } from "http";
 import { connect, ObjectId } from "mongoose";
 import { Server, Socket } from "socket.io";
-import { addNewMessage, getMessages } from "./controllers/socketControllers";
+import {
+	addNewMessage,
+	disconnect,
+	getMessages,
+} from "./controllers/socketControllers";
 import { authRouter } from "./routes/authRoutes";
 import { userRouter } from "./routes/userRoutes";
 import cors from "cors";
@@ -39,8 +43,10 @@ connect(
 
 // socket connections
 io.on("connection", (socket: Socket) => {
-	socket.on("getMessages", ({ roomId }: { roomId: ObjectId }) =>
-		getMessages(socket, roomId)
+	socket.on(
+		"getMessages",
+		({ roomId, userId }: { roomId: ObjectId; userId: ObjectId }) =>
+			getMessages(socket, roomId, userId)
 	);
 
 	socket.on(
@@ -61,9 +67,7 @@ io.on("connection", (socket: Socket) => {
 			})
 	);
 
-	socket.on("disconnect", () => {
-		console.log("user left");
-	});
+	socket.on("disconnect", () => disconnect(socket));
 });
 
 // using express body parser
