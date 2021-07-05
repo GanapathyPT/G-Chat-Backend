@@ -3,21 +3,32 @@ import { NextFunction, Request, Response } from "express";
 import { validationResult } from "express-validator";
 import { OAuth2Client } from "google-auth-library";
 import { sign, verify } from "jsonwebtoken";
-import { Token } from "../models/TokenModel";
-import { User } from "../models/userModel";
-import { CustomRequest, UserType } from "../types/authTypes";
+import { Token, TokenType } from "../models/TokenModel";
+import { User, UserType } from "../models/userModel";
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID as string);
-
+export interface CustomRequest extends Request {
+	user: UserType;
+}
 interface Tokens {
 	refreshToken: string;
 	accessToken: string;
 }
+interface RegisterUserBody {
+	username: string;
+	email: string;
+	password: string | null;
+}
+interface LoginUserBody {
+	email: string;
+	password: string;
+}
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID as string);
 
 // auth utilities
 const createAccessToken = (user: UserType) => {
 	return sign(
-		{ _id: user._id, username: user.username, email: user.email },
+		{ id: user.id, username: user.username, email: user.email },
 		process.env.ACCESS_TOKEN_SECRET as string,
 		{ expiresIn: "1h" }
 	);
@@ -25,8 +36,9 @@ const createAccessToken = (user: UserType) => {
 
 const createRefreshToken = (user: UserType) => {
 	return sign(
-		{ _id: user._id, username: user.username, email: user.email },
-		process.env.REFRESH_TOKEN_SECRET as string
+		{ id: user.id, username: user.username, email: user.email },
+		process.env.REFRESH_TOKEN_SECRET as string,
+		{ expiresIn: "30days" }
 	);
 };
 
@@ -34,7 +46,7 @@ const createTokensForUser = async (user: UserType): Promise<Tokens> => {
 	const accessToken = createAccessToken(user);
 	let refreshToken: string;
 
-	const oldToken = await Token.findOne({ user: user._id });
+	const oldToken = await Token.findOne({ user: user.id });
 	if (oldToken !== null) {
 		oldToken.token = createRefreshToken(user);
 		const { token } = await oldToken.save();
@@ -54,11 +66,10 @@ const createTokensForUser = async (user: UserType): Promise<Tokens> => {
 };
 
 const registerNewuser = async (
-	username: string,
-	email: string,
-	password: string | null
+	credentials: RegisterUserBody
 ): Promise<Tokens> => {
-	const user: UserType = await new User({
+	const { email, password, username } = credentials;
+	const user = await new User({
 		username,
 		email,
 		password,
@@ -80,7 +91,7 @@ const registerNewuser = async (
 
 // middlewares
 const authMiddleware = async (
-	req: CustomRequest,
+	req: Request,
 	res: Response,
 	next: NextFunction
 ) => {
@@ -89,11 +100,12 @@ const authMiddleware = async (
 
 	if (accessToken !== undefined) {
 		try {
-			const user = await verify(
+			const info = await verify(
 				accessToken,
 				process.env.ACCESS_TOKEN_SECRET as string
 			);
-			req.user = user as UserType;
+			const user = await User.findById((info as any).id);
+			(req as CustomRequest).user = user as UserType;
 			return next();
 		} catch {
 			return res.status(403).json({
@@ -121,150 +133,123 @@ const validationMiddleware = async (
 };
 
 const register = async (req: Request, res: Response) => {
-	try {
-		const {
-			email,
-			password,
-			username,
-		}: {
-			email: string;
-			password: string;
-			username: string;
-		} = req.body;
-
-		const alreadyExists = await User.findOne({ email });
-		if (alreadyExists !== null)
-			return res.status(400).json({
-				errors: [
-					{
-						param: "email",
-						msg: "Email alrady exists",
-					},
-				],
-			});
-
-		const salt: string = await genSalt(10);
-		const hashedPassword = await hash(password, salt);
-		const { accessToken, refreshToken } = await registerNewuser(
-			username,
-			email,
-			hashedPassword
-		);
-
-		res.status(201).json({
-			errors: null,
-			accessToken,
-			refreshToken,
+	const { email, password, username }: RegisterUserBody = req.body;
+	if (password === null)
+		return res.json({
+			errors: [
+				{
+					param: "password",
+					msg: "Password can't be empty",
+				},
+			],
 		});
-	} catch {
-		res.status(500).json({
-			errors: null,
+
+	const alreadyExists = await User.findOne({ email });
+	if (alreadyExists !== null)
+		return res.status(400).json({
+			errors: [
+				{
+					param: "email",
+					msg: "Email already exists",
+				},
+			],
 		});
-	}
+
+	const salt: string = await genSalt(10);
+	const hashedPassword = await hash(password, salt);
+	const { accessToken, refreshToken } = await registerNewuser({
+		username,
+		email,
+		password: hashedPassword,
+	});
+
+	res.status(201).json({
+		errors: null,
+		accessToken,
+		refreshToken,
+	});
 };
 
 const login = async (req: Request, res: Response) => {
-	try {
-		const {
-			email,
-			password,
-		}: {
-			email: string;
-			password: string;
-		} = req.body;
+	const { email, password }: LoginUserBody = req.body;
 
-		const user = await User.findOne({ email });
-		if (user === null)
-			return res.status(400).json({
-				errors: [
-					{
-						param: "email",
-						msg: "No User found",
-					},
-				],
-			});
-		if (user.password === null)
-			return res.status(400).json({
-				errors: [
-					{
-						param: "password",
-						msg: "Only Google login allowed for this user",
-					},
-				],
-			});
-
-		const valid = await compare(password, user.password as string);
-		if (!valid)
-			return res.status(401).json({
-				errors: [
-					{
-						param: "password",
-						msg: "Incorrect password",
-					},
-				],
-			});
-
-		const { accessToken, refreshToken } = await createTokensForUser(user);
-		return res.status(200).json({
-			errors: null,
-			accessToken,
-			refreshToken,
+	const user = await User.findOne({ email });
+	if (user === null)
+		return res.status(400).json({
+			errors: [
+				{
+					param: "email",
+					msg: "No User found",
+				},
+			],
 		});
-	} catch {
-		res.status(500).json({
-			errors: null,
+	// if password is null then only google login can be done
+	if (user.password === null)
+		return res.status(400).json({
+			errors: [
+				{
+					param: "password",
+					msg: "Only Google login allowed for this user",
+				},
+			],
 		});
-	}
+
+	const valid = await compare(password, user.password);
+	if (!valid)
+		return res.status(401).json({
+			errors: [
+				{
+					param: "password",
+					msg: "Incorrect password",
+				},
+			],
+		});
+
+	const { accessToken, refreshToken } = await createTokensForUser(user);
+	return res.status(200).json({
+		errors: null,
+		accessToken,
+		refreshToken,
+	});
 };
 
 const refresh = async (req: Request, res: Response) => {
-	try {
-		const { refreshToken }: { refreshToken: string } = req.body;
+	const { refreshToken }: { refreshToken: string } = req.body;
 
-		const token = await Token.findOne({ token: refreshToken });
-		if (token === null)
-			return res.status(400).json({
-				error: "User logged out or deleted",
-			});
-		const user = await User.findById(token.user);
-		if (user !== null) {
-			const accessToken = createAccessToken(user);
-			return res.status(200).json({
-				accessToken,
-			});
-		}
-		res.status(400).json({
-			error: "User not found",
+	const token = await Token.findOne({ token: refreshToken });
+	if (token === null)
+		return res.status(400).json({
+			error: "User logged out or deleted",
 		});
-	} catch {
-		res.status(500).json({
-			error: "Internal Server Error",
+	const user = await User.findById(token.user);
+	if (user !== null) {
+		const accessToken = createAccessToken(user);
+		return res.status(200).json({
+			accessToken,
 		});
 	}
+	res.status(400).json({
+		error: "User not found",
+	});
 };
 
 const logout = async (req: Request, res: Response) => {
 	const currentUser = (req as CustomRequest).user;
-	if (currentUser) {
-		const token = await Token.deleteOne({ user: currentUser._id });
-		if (token.ok)
-			return res.status(200).json({
-				error: null,
-				msg: "user token deleted",
-			});
+	const token = await Token.deleteOne({ user: currentUser._id });
+	if (token.ok)
 		return res.status(200).json({
-			error: "token not deleted",
+			error: null,
+			msg: "user token deleted",
 		});
-	}
-	res.status(402).json({
-		error: "auth failed",
+	return res.status(200).json({
+		error: "token not deleted",
 	});
 };
 
 const googleAuth = async (req: Request, res: Response) => {
 	const token: string = req.body.token;
 
-	const ticket = await client.verifyIdToken({
+	const ticket = await googleClient.verifyIdToken({
 		idToken: token,
 		audience: process.env.GOOGLE_CLIENT_ID as string,
 	});
@@ -286,11 +271,11 @@ const googleAuth = async (req: Request, res: Response) => {
 		}
 		if (name && email) {
 			// register a new user
-			const { refreshToken, accessToken } = await registerNewuser(
-				name,
+			const { refreshToken, accessToken } = await registerNewuser({
+				username: name,
 				email,
-				null
-			);
+				password: null,
+			});
 			return res.status(201).json({
 				errors: null,
 				accessToken,

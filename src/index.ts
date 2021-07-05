@@ -1,31 +1,24 @@
 import { config } from "dotenv";
 import express, { json } from "express";
 import { createServer } from "http";
-import { connect, ObjectId } from "mongoose";
+import { connect } from "mongoose";
 import { Server, Socket } from "socket.io";
-import {
-	addNewMessage,
-	disconnect,
-	getMessages,
-} from "./controllers/socketControllers";
 import { authRouter } from "./routes/authRoutes";
 import { userRouter } from "./routes/userRoutes";
 import cors from "cors";
+import {
+	socketAuthMiddleware,
+	socketController,
+} from "./controllers/socketControllers";
 
-// registering models for neglecting errors
-import { User } from "./models/userModel";
-import { Token } from "./models/TokenModel";
-import { Message } from "./models/MessageModel";
-import { Room } from "./models/RoomModel";
-
-// loading the env varibles
+// loading the env variables
 config();
-// loading server and conncting db
+// loading server and connecting db
 const expressApp = express();
 const server = createServer(expressApp);
 const io = new Server(server, {
 	cors: {
-		origin: "*",
+		origin: process.env.FRONTEND_URL,
 	},
 });
 const PORT = process.env.PORT as string;
@@ -42,48 +35,20 @@ connect(
 );
 
 // socket connections
-io.on("connection", (socket: Socket) => {
-	socket.on(
-		"getMessages",
-		({ roomId, userId }: { roomId: ObjectId; userId: ObjectId }) =>
-			getMessages(socket, roomId, userId)
-	);
-
-	socket.on(
-		"sendMessage",
-		(newMessage: {
-			roomId: ObjectId;
-			author: ObjectId;
-			message: string;
-			time: string;
-		}) =>
-			addNewMessage({
-				io,
-				socket,
-				roomId: newMessage.roomId,
-				author: newMessage.author,
-				message: newMessage.message,
-				timestamp: new Date(newMessage.time),
-			})
-	);
-
-	socket.on("disconnect", () => disconnect(socket));
-});
+io.use(socketAuthMiddleware);
+io.on("connection", (socket: Socket) => socketController(socket, io));
 
 // using express body parser
 expressApp.use(json());
 expressApp.use(
 	cors({
-		origin: "https://g-chat-messenger.netlify.app",
+		origin: process.env.FRONTEND_URL,
 	})
 );
 
 // registering all the routes
 expressApp.use("/api/auth", authRouter);
 expressApp.use("/api/user", userRouter);
-
-// sending frontend files
-expressApp.use("/", express.static("public"));
 
 server.listen(PORT, () => {
 	console.log(`Server Started at Port, ${PORT}`);

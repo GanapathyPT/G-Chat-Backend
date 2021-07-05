@@ -5,26 +5,21 @@ import {
 	validationMiddleware,
 } from "../controllers/authControllers";
 import {
-	addFriend,
-	getFriends,
+	createRoom,
+	getAllRooms,
 	getUser,
-	listUsers,
 } from "../controllers/userController";
 
 const userRouter = Router();
 
-userRouter.get("/list", authMiddleware, listUsers);
-
 userRouter.get("/get-user", authMiddleware, getUser);
-
-userRouter.get("/friends", authMiddleware, getFriends);
-
+userRouter.get("/rooms", authMiddleware, getAllRooms);
 userRouter.post(
-	"/add-friend",
+	"/create-room",
 	authMiddleware,
 	body("newFriend").isString(),
 	validationMiddleware,
-	addFriend
+	createRoom
 );
 
 export { userRouter };

@@ -1,10 +1,34 @@
+import { verify } from "jsonwebtoken";
 import { ObjectId } from "mongoose";
 import { Server, Socket } from "socket.io";
-import { Message } from "../models/MessageModel";
 import { Room } from "../models/RoomModel";
-import { User } from "../models/userModel";
-import { UserType } from "../types/authTypes";
-import { CustomSocket } from "../types/chatTypes";
+import { User, UserType } from "../models/userModel";
+import { extractUserInfo } from "./userController";
+
+interface NewMessage {
+	roomId: ObjectId;
+	message: string;
+	createdAt: Date;
+}
+
+interface Handler {
+	socket: Socket;
+	io: Server;
+}
+
+interface CustomSocket extends Socket {
+	user: UserType;
+}
+
+enum SocketEmitTypes {
+	NEW_MESSAGE = "NEW_MESSAGE",
+	ALERT = "ALERT",
+}
+
+enum SocketListenerTypes {
+	SEND_MESSAGE = "SEND_MESSAGE",
+	DISCONNECT = "disconnect",
+}
 
 const makeUserOnline = (user: UserType) => {
 	user.online = true;
@@ -17,82 +41,39 @@ const makeUserOffline = (user: UserType) => {
 };
 
 /**
- * get last day message for the room (if exists else created) and connect to the room
- * @param socket -> socket to emit the events
- * @param roomId -> room id for which to get the messages
- * @param userId -> current uuser id
- */
-const getMessages = async (
-	socket: Socket,
-	roomId: ObjectId,
-	userId: ObjectId
-) => {
-	const user = await User.findById(userId);
-	if (user !== null) {
-		(socket as CustomSocket).userId = user._id;
-		makeUserOnline(user);
-
-		const room = await Room.findById(roomId);
-		if (room) {
-			socket.join(room.name);
-
-			const messagesId = room.messages;
-			const messages = await Message.find({
-				_id: {
-					$in: messagesId,
-				},
-			});
-			return socket.emit("oldMessages", {
-				messages: messages.sort(
-					(a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-				),
-			});
-		}
-		return socket.emit("alert", {
-			type: "error",
-			msg: "room not found",
-		});
-	}
-};
-
-/**
- * add new message to the db and send the same to all the users inthe room
+ * add new message to the db and send the same to all the users in the room
  * @param io -> io object
  * @param socket -> socket object
  * @param roomId -> room to send the message
- * @param author -> author of the message
  * @param message -> original message text
  */
 const addNewMessage = async ({
 	io,
 	socket,
 	roomId,
-	author,
 	message,
-	timestamp,
-}: {
-	io: Server;
-	socket: Socket;
-	roomId: ObjectId;
-	author: ObjectId;
-	message: string;
-	timestamp: Date;
-}) => {
-	// creating a new message
-	const newMessage = await new Message({
-		author,
-		message,
-		timestamp,
-	}).save();
+	createdAt,
+}: Handler & NewMessage) => {
+	const currentUser = (socket as CustomSocket).user;
 
 	// add the message to the room
 	const room = await Room.findById(roomId);
 	if (room) {
-		room.messages.push(newMessage);
+		room.messages.push({
+			author: currentUser._id,
+			message,
+			createdAt,
+		});
 		await room.save();
-		return io.to(room.name).emit("newMessage", { newMessage });
+		socket.join(room.id);
+		return io.to(room.id).emit(SocketEmitTypes.NEW_MESSAGE, {
+			author: extractUserInfo(currentUser),
+			message,
+			createdAt,
+		});
 	}
-	return socket.emit("alert", {
+	console.log("got new message but room not found");
+	return socket.emit(SocketEmitTypes.ALERT, {
 		type: "error",
 		msg: "Can't send message",
 	});
@@ -103,10 +84,48 @@ const addNewMessage = async ({
  * @param socket -> socket of the disconnected user
  */
 const disconnect = async (socket: Socket) => {
-	const userId = (socket as CustomSocket).userId;
-
-	const user = await User.findById(userId);
-	if (user) makeUserOffline(user);
+	const user = (socket as CustomSocket).user;
+	makeUserOffline(user);
 };
 
-export { getMessages, addNewMessage, disconnect };
+function socketController(socket: Socket, io: Server) {
+	const user = (socket as CustomSocket).user;
+	console.log(user.username, "connected");
+	makeUserOnline(user);
+
+	socket.on(SocketListenerTypes.SEND_MESSAGE, (newMessage: NewMessage) =>
+		addNewMessage({
+			io,
+			socket,
+			...newMessage,
+		})
+	);
+
+	socket.on(SocketListenerTypes.DISCONNECT, () => disconnect(socket));
+}
+
+async function socketAuthMiddleware(
+	socket: Socket,
+	next: (err?: Error | undefined) => void
+) {
+	if (socket.handshake.query && socket.handshake.query.token) {
+		const accessToken = socket.handshake.query.token as string;
+		try {
+			const info = await verify(
+				accessToken,
+				process.env.ACCESS_TOKEN_SECRET as string
+			);
+			const user = await User.findById((info as any).id);
+			(socket as CustomSocket).user = user as UserType;
+			next();
+		} catch {
+			console.error("auth failed");
+			next(new Error("Authentication failed"));
+		}
+	} else {
+		console.error("auth: no token found");
+		next(new Error("Authentication failed"));
+	}
+}
+
+export { socketController, socketAuthMiddleware };

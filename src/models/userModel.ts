@@ -1,41 +1,41 @@
-import { Model, model, Schema } from "mongoose";
-import { UserType } from "../types/authTypes";
+import { Model, model, Schema, Document } from "mongoose";
+
+export interface UserType extends Document {
+	_id: Schema.Types.ObjectId;
+	username: string;
+	email: string;
+	password: string | null;
+	profilePic?: string;
+	rooms: Schema.Types.ObjectId[];
+	online: boolean;
+	createdAt: Date;
+}
 
 const UserSchema = new Schema({
 	username: {
 		type: String,
 		required: true,
+		index: true,
 		max: 250,
 	},
 	email: {
 		type: String,
 		required: true,
+		unique: true,
 		max: 250,
 	},
-	password: {
-		type: String,
-	},
-	friends: [
+	password: String,
+	profilePic: String,
+	rooms: [
 		{
-			userId: {
-				type: Schema.Types.ObjectId,
-				ref: "User",
-			},
-			roomId: {
-				type: Schema.Types.ObjectId,
-				ref: "Room",
-			},
+			type: Schema.Types.ObjectId,
+			ref: "Room",
 		},
 	],
 	online: {
 		type: Boolean,
 		default: false,
 	},
-	createdAt: {
-		type: Date,
-		default: Date.now,
-	},
 });
 
-UserSchema.index({ username: "text", email: "text" });
 export const User: Model<UserType> = model("User", UserSchema);
