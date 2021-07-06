@@ -35,6 +35,7 @@ const extractRoomInfo = (room: RoomType, currentUser: UserType) => ({
 	name: getRoomName(room, currentUser),
 	users: getRoomUsers(room),
 	messages: sortMessages(room.messages as MessageType[]),
+	isPersonal: room.isPersonal,
 });
 
 export const getAllRooms = async (req: Request, res: Response) => {

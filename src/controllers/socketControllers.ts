@@ -23,6 +23,8 @@ interface CustomSocket extends Socket {
 enum SocketEmitTypes {
 	NEW_MESSAGE = "NEW_MESSAGE",
 	ALERT = "ALERT",
+	USER_ONLINE = "USER_ONLINE",
+	USER_OFFLINE = "USER_OFFLINE",
 }
 
 enum SocketListenerTypes {
@@ -30,14 +32,18 @@ enum SocketListenerTypes {
 	DISCONNECT = "disconnect",
 }
 
-const makeUserOnline = (user: UserType) => {
+const makeUserOnline = async (user: UserType, io: Server) => {
+	io.emit(SocketEmitTypes.USER_ONLINE, user.id);
+	console.log("user online", user.username);
 	user.online = true;
-	user.save();
+	await user.save();
 };
 
-const makeUserOffline = (user: UserType) => {
+const makeUserOffline = async (user: UserType, io: Server) => {
+	io.emit(SocketEmitTypes.USER_OFFLINE, user.id);
+	console.log("user offline", user.username);
 	user.online = false;
-	user.save();
+	await user.save();
 };
 
 /**
@@ -72,7 +78,6 @@ const addNewMessage = async ({
 			createdAt,
 		});
 	}
-	console.log("got new message but room not found");
 	return socket.emit(SocketEmitTypes.ALERT, {
 		type: "error",
 		msg: "Can't send message",
@@ -83,15 +88,14 @@ const addNewMessage = async ({
  * handling disconnect of the user
  * @param socket -> socket of the disconnected user
  */
-const disconnect = async (socket: Socket) => {
+const disconnect = async (socket: Socket, io: Server) => {
 	const user = (socket as CustomSocket).user;
-	makeUserOffline(user);
+	await makeUserOffline(user, io);
 };
 
 function socketController(socket: Socket, io: Server) {
 	const user = (socket as CustomSocket).user;
-	console.log(user.username, "connected");
-	makeUserOnline(user);
+	makeUserOnline(user, io);
 
 	socket.on(SocketListenerTypes.SEND_MESSAGE, (newMessage: NewMessage) =>
 		addNewMessage({
@@ -101,7 +105,7 @@ function socketController(socket: Socket, io: Server) {
 		})
 	);
 
-	socket.on(SocketListenerTypes.DISCONNECT, () => disconnect(socket));
+	socket.on(SocketListenerTypes.DISCONNECT, () => disconnect(socket, io));
 }
 
 async function socketAuthMiddleware(
@@ -119,11 +123,9 @@ async function socketAuthMiddleware(
 			(socket as CustomSocket).user = user as UserType;
 			next();
 		} catch {
-			console.error("auth failed");
 			next(new Error("Authentication failed"));
 		}
 	} else {
-		console.error("auth: no token found");
 		next(new Error("Authentication failed"));
 	}
 }

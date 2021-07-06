@@ -27,6 +27,7 @@ connect(
 	{
 		useNewUrlParser: true,
 		useUnifiedTopology: true,
+		useCreateIndex: true,
 	},
 	(err) => {
 		if (err) console.error(err.message);
