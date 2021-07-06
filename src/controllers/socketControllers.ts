@@ -56,6 +56,10 @@ const makeUserOffline = async (user: UserType, io: Server) => {
 	await user.save();
 };
 
+const joinRoom = async (user: UserType, socket: Socket) => {
+	socket.join(user.rooms.map((room) => room.toString()));
+};
+
 /**
  * add new message to the db and send the same to all the users in the room
  * @param io -> io object
@@ -81,11 +85,13 @@ const addNewMessage = async ({
 			createdAt,
 		});
 		await room.save();
-		socket.join(room.id);
 		return io.to(room.id).emit(SocketEmitTypes.NEW_MESSAGE, {
-			author: extractUserInfo(currentUser),
-			message,
-			createdAt,
+			roomId: room.id,
+			message: {
+				author: extractUserInfo(currentUser),
+				message,
+				createdAt,
+			},
 		});
 	}
 	return socket.emit(SocketEmitTypes.ALERT, {
@@ -112,6 +118,8 @@ function socketController(socket: Socket, io: Server) {
 	// when a user connects make him as online
 	const user = (socket as CustomSocket).user;
 	makeUserOnline(user, io);
+	// adding the user in all the required rooms
+	joinRoom(user, socket);
 
 	socket.on(SocketListenerTypes.SEND_MESSAGE, (newMessage: NewMessage) =>
 		addNewMessage({
