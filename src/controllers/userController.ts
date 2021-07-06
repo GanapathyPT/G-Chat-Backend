@@ -1,46 +1,105 @@
 import { Request, Response } from "express";
 import { ObjectId } from "mongoose";
-import { Room } from "../models/RoomModel";
-import { User } from "../models/userModel";
-import { CustomRequest } from "../types/authTypes";
+import { MessageType, Room, RoomType } from "../models/RoomModel";
+import { User, UserType } from "../models/userModel";
+import { CustomRequest } from "./authControllers";
 
-const listUsers = async (req: Request, res: Response) => {
-	const usersList = await User.find();
-	res.json({
-		result: usersList,
-	});
-};
+/**
+ * try to execute the given callback controller and if any error found log it
+ * @param callback -> controller callback
+ */
+export const tryExecute =
+	(callback: (req: Request, res: Response) => void) =>
+	(req: Request, res: Response) => {
+		try {
+			callback(req, res);
+		} catch (error) {
+			console.error(error);
+		}
+	};
 
-const getFriends = async (req: Request, res: Response) => {
-	const currentUser = (req as CustomRequest).user;
-
-	const user = currentUser && (await User.findById(currentUser._id));
-	if (user && user.friends) {
-		const friends = await User.find({
-			_id: {
-				$in: user.friends.map((friend) => friend.userId),
-			},
-		});
-		return res.status(200).json({
-			result: friends.map((friend, index) => ({
-				_id: friend._id,
-				email: friend.email,
-				username: friend.username,
-				roomId: user.friends && user.friends[index].roomId,
-			})),
-		});
+/**
+ * get the room name based on the room type (personal or group)
+ * @param room -> room object
+ * @param currentUser -> current user who makes the request
+ */
+const getRoomName = (room: RoomType, currentUser: UserType) => {
+	if (room.isPersonal && room.users.length === 2) {
+		const friend =
+			(room.users[0] as UserType).id === currentUser.id
+				? room.users[1]
+				: room.users[0];
+		return (friend as UserType).username;
 	}
-	res.status(400).json({
-		error: "no friends found",
-		result: [],
+
+	return room.name;
+};
+/**
+ * get the users of a room as an extracted info
+ * @param room -> room object
+ */
+const getRoomUsers = (room: RoomType) =>
+	(room.users as UserType[]).map(extractUserInfo);
+/**
+ * sort all the message with the help of createdAt timestamp
+ * @param messages -> messages to sort
+ */
+const sortMessages = (messages: MessageType[]) =>
+	messages.sort(
+		(msg1, msg2) => msg1.createdAt.getTime() - msg2.createdAt.getTime()
+	);
+
+/**
+ * helper function to get the required info of a user
+ * @param user -> useer object
+ */
+export const extractUserInfo = (user: UserType) => ({
+	id: user.id,
+	username: user.username,
+	email: user.email,
+	profilePic: user.profilePic,
+	online: user.online,
+});
+
+/**
+ * helper function to get the required info of a room
+ * @param room -> room object
+ * @param currentUser -> current user who makes the request
+ */
+const extractRoomInfo = (room: RoomType, currentUser: UserType) => ({
+	id: room.id,
+	name: getRoomName(room, currentUser),
+	users: getRoomUsers(room),
+	messages: sortMessages(room.messages as MessageType[]),
+	isPersonal: room.isPersonal,
+});
+
+/**
+ * get all the rooms of the current user
+ */
+export const getAllRooms = async (req: Request, res: Response) => {
+	const currentUser = (req as CustomRequest).user;
+	const rooms = await Room.find({
+		_id: {
+			$in: currentUser.rooms,
+		},
+	})
+		.populate("users")
+		.populate("messages");
+
+	res.status(200).json({
+		result: rooms.map((room) => extractRoomInfo(room, currentUser)),
 	});
 };
 
-const getUser = async (req: Request, res: Response) => {
+/**
+ * get all the users maching the search query
+ */
+export const getUser = async (req: Request, res: Response) => {
 	const currentUser = (req as CustomRequest).user;
 
 	const searchParam = req.query.q;
-	if (searchParam && currentUser) {
+	if (searchParam) {
 		const users = await User.find({
 			$or: [
 				{
@@ -49,22 +108,12 @@ const getUser = async (req: Request, res: Response) => {
 						$options: "i",
 					},
 				},
-				{
-					email: {
-						$regex: searchParam as string,
-						$options: "i",
-					},
-				},
 			],
 		});
 		return res.json({
 			result: users
-				.filter((user) => user._id !== currentUser._id)
-				.map((user) => ({
-					_id: user._id,
-					username: user.username,
-					email: user.email,
-				})),
+				.filter((user) => user.id !== currentUser.id)
+				.map(extractUserInfo),
 		});
 	}
 	res.json({
@@ -73,43 +122,34 @@ const getUser = async (req: Request, res: Response) => {
 	});
 };
 
-const addFriend = async (req: Request, res: Response) => {
+/**
+ * create a new room (both for pc and groups)
+ * 	-- groups not yet implemented
+ */
+export const createRoom = async (req: Request, res: Response) => {
 	const currentUser = (req as CustomRequest).user;
 	const { newFriend }: { newFriend: ObjectId } = req.body;
 
-	if (currentUser) {
-		const user = await User.findById(currentUser._id);
-		const friend = await User.findById(newFriend);
-		if (user && friend && user.friends && friend.friends) {
-			// creating a new Room for the user and his newFriend
-			const room = await new Room({
-				users: [user._id, friend._id],
-				messages: [],
-				name: `${user.username}__${friend.username}`,
-			}).save();
+	const friendUser = await User.findById(newFriend);
+	if (friendUser) {
+		// creating a new Room for the user and his newFriend
+		const room = await new Room({
+			messages: [],
+			users: [currentUser._id, friendUser._id],
+			isPersonal: true,
+		}).save();
 
-			user.friends.push({ userId: friend._id, roomId: room._id });
-			await user.save();
+		currentUser.rooms.push(room._id);
+		await currentUser.save();
 
-			friend.friends.push({ userId: user._id, roomId: room._id });
-			await friend.save();
+		friendUser.rooms.push(room._id);
+		await friendUser.save();
 
-			return res.status(200).json({
-				result: {
-					_id: friend._id,
-					email: friend.email,
-					username: friend.username,
-					roomId: room._id,
-				},
-			});
-		}
-		return res.status(400).json({
-			error: "User Can't be found",
+		return res.status(200).json({
+			result: extractRoomInfo(room, currentUser),
 		});
 	}
-	res.status(401).json({
-		error: "user not authorized",
+	return res.status(400).json({
+		error: "User Can't be found",
 	});
 };
-
-export { listUsers, getUser, getFriends, addFriend };

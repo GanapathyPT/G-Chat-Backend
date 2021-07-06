@@ -1,5 +1,10 @@
-import { Model, model, Schema, Types } from "mongoose";
-import { TokenType } from "../types/authTypes";
+import { Model, model, Schema, Document } from "mongoose";
+
+export interface TokenType extends Document {
+	_id: Schema.Types.ObjectId;
+	user: Schema.Types.ObjectId;
+	token: string;
+}
 
 const TokenSchema = new Schema({
 	user: {
