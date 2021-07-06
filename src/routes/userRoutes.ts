@@ -8,18 +8,19 @@ import {
 	createRoom,
 	getAllRooms,
 	getUser,
+	tryExecute,
 } from "../controllers/userController";
 
 const userRouter = Router();
 
-userRouter.get("/get-user", authMiddleware, getUser);
-userRouter.get("/rooms", authMiddleware, getAllRooms);
+userRouter.get("/get-user", authMiddleware, tryExecute(getUser));
+userRouter.get("/rooms", authMiddleware, tryExecute(getAllRooms));
 userRouter.post(
 	"/create-room",
 	authMiddleware,
 	body("newFriend").isString(),
 	validationMiddleware,
-	createRoom
+	tryExecute(createRoom)
 );
 
 export { userRouter };

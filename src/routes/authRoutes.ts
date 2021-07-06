@@ -9,6 +9,7 @@ import {
 	logout,
 	googleAuth,
 } from "../controllers/authControllers";
+import { tryExecute } from "../controllers/userController";
 
 const authRouter = Router();
 
@@ -23,9 +24,8 @@ authRouter.post(
 		minNumbers: 0,
 	}),
 	validationMiddleware,
-	register
+	tryExecute(register)
 );
-
 authRouter.post(
 	"/login",
 	// validations
@@ -36,19 +36,16 @@ authRouter.post(
 		minNumbers: 0,
 	}),
 	validationMiddleware,
-	login
+	tryExecute(login)
 );
-
 authRouter.post(
 	"/refresh",
 	// validation
 	body("refreshToken").notEmpty(),
 	validationMiddleware,
-	refresh
+	tryExecute(refresh)
 );
-
 authRouter.get("/logout", authMiddleware, logout);
-
 authRouter.post("/googleAuth", googleAuth);
 
 export { authRouter };

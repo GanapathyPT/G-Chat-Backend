@@ -3,7 +3,7 @@ import { NextFunction, Request, Response } from "express";
 import { validationResult } from "express-validator";
 import { OAuth2Client } from "google-auth-library";
 import { sign, verify } from "jsonwebtoken";
-import { Token, TokenType } from "../models/TokenModel";
+import { Token } from "../models/TokenModel";
 import { User, UserType } from "../models/userModel";
 
 export interface CustomRequest extends Request {
@@ -17,15 +17,21 @@ interface RegisterUserBody {
 	username: string;
 	email: string;
 	password: string | null;
+	profilePic?: string;
 }
 interface LoginUserBody {
 	email: string;
 	password: string;
 }
 
+// google client instance
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID as string);
 
 // auth utilities
+/**
+ * create a new access token for the user
+ * @param user -> user object to create the access token
+ */
 const createAccessToken = (user: UserType) => {
 	return sign(
 		{ id: user.id, username: user.username, email: user.email },
@@ -33,7 +39,10 @@ const createAccessToken = (user: UserType) => {
 		{ expiresIn: "1h" }
 	);
 };
-
+/**
+ * create a new refresh token for the user
+ * @param user -> user object to create the refresh token
+ */
 const createRefreshToken = (user: UserType) => {
 	return sign(
 		{ id: user.id, username: user.username, email: user.email },
@@ -42,12 +51,19 @@ const createRefreshToken = (user: UserType) => {
 	);
 };
 
+/**
+ * helper function to create tokens for the user based on some criteria
+ * @param user -> user object
+ */
 const createTokensForUser = async (user: UserType): Promise<Tokens> => {
 	const accessToken = createAccessToken(user);
 	let refreshToken: string;
 
 	const oldToken = await Token.findOne({ user: user.id });
 	if (oldToken !== null) {
+		// if old token is found then replacing itwith new token
+		// this is done to prevent the user from logging in with more than 1 device at a time
+		// only the last logged in device login will work
 		oldToken.token = createRefreshToken(user);
 		const { token } = await oldToken.save();
 		refreshToken = token;
@@ -65,14 +81,19 @@ const createTokensForUser = async (user: UserType): Promise<Tokens> => {
 	};
 };
 
+/**
+ * registering a new user (normal register and google oauth)
+ * @param credentials -> details, crendentials of the user
+ */
 const registerNewuser = async (
 	credentials: RegisterUserBody
 ): Promise<Tokens> => {
-	const { email, password, username } = credentials;
+	const { email, password, username, profilePic } = credentials;
 	const user = await new User({
 		username,
 		email,
 		password,
+		profilePic,
 	}).save();
 
 	const accessToken = createAccessToken(user);
@@ -90,6 +111,10 @@ const registerNewuser = async (
 };
 
 // middlewares
+
+/**
+ * auth middleware to check if user is logged in or not
+ */
 const authMiddleware = async (
 	req: Request,
 	res: Response,
@@ -118,6 +143,9 @@ const authMiddleware = async (
 	});
 };
 
+/**
+ * validation middleware if the request has the required info
+ */
 const validationMiddleware = async (
 	req: Request,
 	res: Response,
@@ -132,6 +160,9 @@ const validationMiddleware = async (
 	next();
 };
 
+/**
+ * register a new user
+ */
 const register = async (req: Request, res: Response) => {
 	const { email, password, username }: RegisterUserBody = req.body;
 	if (password === null)
@@ -170,6 +201,9 @@ const register = async (req: Request, res: Response) => {
 	});
 };
 
+/**
+ * login a user
+ */
 const login = async (req: Request, res: Response) => {
 	const { email, password }: LoginUserBody = req.body;
 
@@ -213,6 +247,9 @@ const login = async (req: Request, res: Response) => {
 	});
 };
 
+/**
+ * refresh the access token using the refresh token
+ */
 const refresh = async (req: Request, res: Response) => {
 	const { refreshToken }: { refreshToken: string } = req.body;
 
@@ -233,6 +270,9 @@ const refresh = async (req: Request, res: Response) => {
 	});
 };
 
+/**
+ * logout a user
+ */
 const logout = async (req: Request, res: Response) => {
 	const currentUser = (req as CustomRequest).user;
 	const token = await Token.deleteOne({ user: currentUser._id });
@@ -246,6 +286,9 @@ const logout = async (req: Request, res: Response) => {
 	});
 };
 
+/**
+ * login or register a user with googl authentication
+ */
 const googleAuth = async (req: Request, res: Response) => {
 	const token: string = req.body.token;
 
@@ -256,7 +299,7 @@ const googleAuth = async (req: Request, res: Response) => {
 
 	const payload = ticket.getPayload();
 	if (payload) {
-		const { email, name } = payload;
+		const { email, name, picture } = payload;
 		const user = await User.findOne({ email: email });
 		// login the user if user found
 		if (user) {
@@ -275,6 +318,7 @@ const googleAuth = async (req: Request, res: Response) => {
 				username: name,
 				email,
 				password: null,
+				profilePic: picture,
 			});
 			return res.status(201).json({
 				errors: null,

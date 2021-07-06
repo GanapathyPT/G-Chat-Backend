@@ -32,6 +32,11 @@ enum SocketListenerTypes {
 	DISCONNECT = "disconnect",
 }
 
+/**
+ * save user as online and emit the same to all users
+ * @param user -> user object
+ * @param io -> io to emit the event
+ */
 const makeUserOnline = async (user: UserType, io: Server) => {
 	io.emit(SocketEmitTypes.USER_ONLINE, user.id);
 	console.log("user online", user.username);
@@ -39,6 +44,11 @@ const makeUserOnline = async (user: UserType, io: Server) => {
 	await user.save();
 };
 
+/**
+ * save user as offline and emit the same to all users
+ * @param user -> user object
+ * @param io -> io to emit the event
+ */
 const makeUserOffline = async (user: UserType, io: Server) => {
 	io.emit(SocketEmitTypes.USER_OFFLINE, user.id);
 	console.log("user offline", user.username);
@@ -93,7 +103,13 @@ const disconnect = async (socket: Socket, io: Server) => {
 	await makeUserOffline(user, io);
 };
 
+/**
+ * controller to handle events on sockt connection
+ * @param socket -> socket of the current user
+ * @param io -> global i0 server object
+ */
 function socketController(socket: Socket, io: Server) {
+	// when a user connects make him as online
 	const user = (socket as CustomSocket).user;
 	makeUserOnline(user, io);
 
@@ -108,6 +124,11 @@ function socketController(socket: Socket, io: Server) {
 	socket.on(SocketListenerTypes.DISCONNECT, () => disconnect(socket, io));
 }
 
+/**
+ * middleware to check if the socket connection emmited is from an authenticated source\
+ * @param socket -> socket of connecting user
+ * @param next -> neext function that needed to be executed
+ */
 async function socketAuthMiddleware(
 	socket: Socket,
 	next: (err?: Error | undefined) => void
