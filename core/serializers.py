@@ -48,6 +48,16 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class UserDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+        )
+
+
 class TokenObtainPairSerializer_EmailBackend(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         # overwritting the username_field as email field
