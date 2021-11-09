@@ -1,7 +1,9 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -44,3 +46,10 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         user.save()
 
         return user
+
+
+class TokenObtainPairSerializer_EmailBackend(TokenObtainPairSerializer):
+    def __init__(self, *args, **kwargs):
+        # overwritting the username_field as email field
+        self.username_field = get_user_model().EMAIL_FIELD
+        super().__init__(*args, **kwargs)

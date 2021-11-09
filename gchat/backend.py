@@ -6,7 +6,12 @@ class EmailBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
         UserModel = get_user_model()
         try:
-            user = UserModel.objects.get(email=username)
+            # if email is passed give it first preference
+            email = kwargs["email"]
+            if email is not None:
+                user = UserModel.objects.get(email=email)
+            else:
+                user = UserModel.objects.get(email=username)
         except UserModel.DoesNotExist:
             return None
         else:
