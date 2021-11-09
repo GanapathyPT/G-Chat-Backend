@@ -7,7 +7,7 @@ class EmailBackend(ModelBackend):
         UserModel = get_user_model()
         try:
             # if email is passed give it first preference
-            email = kwargs["email"]
+            email = kwargs.get("email")
             if email is not None:
                 user = UserModel.objects.get(email=email)
             else:
