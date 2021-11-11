@@ -1,7 +1,11 @@
 from rest_framework import permissions, generics
 
 from chat.models import Message, Room
-from chat.serializers import CreateRoomSerializer, MessageSerializer, RoomSerializer
+from chat.serializers import (
+    CreateRoomSerializer,
+    CreateMessageSerializer,
+    RoomSerializer,
+)
 
 
 class AddRoomView(generics.CreateAPIView):
@@ -24,4 +28,4 @@ class RoomListView(generics.ListAPIView):
 class MessageCreateView(generics.CreateAPIView):
     queryset = Message.objects.all()
     permission_classes = (permissions.IsAuthenticated,)
-    serializer_class = MessageSerializer
+    serializer_class = CreateMessageSerializer
