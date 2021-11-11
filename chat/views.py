@@ -2,7 +2,7 @@ from rest_framework import exceptions, permissions, generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from chat.models import Message, Room
+from chat.models import Message, ReadReceipt, Room
 from chat.serializers import (
     CreateRoomSerializer,
     CreateMessageSerializer,
@@ -76,3 +76,30 @@ class NewMessagesListView(APIView):
             response[room_id] = new_messages.data
 
         return Response(response)
+
+
+class MarkAsReadView(APIView):
+    permission_class = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        user = request.user
+
+        room_id = request.data.get("room")
+        last_message_id = request.data.get("last_message_id")
+
+        if not all([room_id, last_message_id]):
+            raise exceptions.ValidationError("data not provided")
+
+        read_receipt = None
+        try:
+            read_receipt = ReadReceipt.objects.get(room=room_id, user=user)
+        except ReadReceipt.DoesNotExist:
+            # just for now
+            raise exceptions.NotFound()
+
+        # DANGER: JUST FOR NOW
+        message = Message.objects.get(pk=last_message_id)
+
+        read_receipt.last_message = message
+        read_receipt.save()
+        return Response("done")

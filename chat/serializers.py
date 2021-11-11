@@ -50,6 +50,6 @@ class RoomSerializer(serializers.ModelSerializer):
         read_receipt = None
         try:
             read_receipt = ReadReceipt.objects.get(room=room, user=user)
-            return read_receipt.id
+            return read_receipt.last_message.id
         except ReadReceipt.DoesNotExist:
             return -1
