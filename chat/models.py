@@ -25,13 +25,14 @@ class Room(BaseModel):
 
 class Message(BaseModel):
     content = models.TextField()
+    room = models.ForeignKey(Room, on_delete=models.CASCADE)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"{self.author} - {self.created_at}"
 
 
-class ReadStatus(models.Model):
+class ReadReceipt(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     last_message = models.ForeignKey(Message, on_delete=models.CASCADE)
