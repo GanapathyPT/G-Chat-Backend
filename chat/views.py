@@ -17,6 +17,22 @@ class AddRoomView(generics.CreateAPIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = CreateRoomSerializer
 
+    def perform_create(self, serializer):
+        return super().perform_create(serializer)
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        # create room with default serializer
+        room = super().create(request, *args, **kwargs)
+        # get the room and add our user to it
+        room_id = room.data.get("id")
+        room = Room.objects.get(pk=room_id)
+        room.users.add(user)
+        room.save()
+        # now return the serialized response same as list room
+        room_serialized = RoomSerializer(room, context={"request": request}).data
+        return Response(room_serialized)
+
 
 class RoomListView(generics.ListAPIView):
     queryset = Room.objects.all()
