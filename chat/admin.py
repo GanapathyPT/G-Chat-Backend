@@ -12,7 +12,7 @@ class MessageAdmin(admin.ModelAdmin):
 
 
 class ReadReceiptAdmin(admin.ModelAdmin):
-    list_display = ("__str__", "last_message", "room")
+    list_display = ("__str__", "last_read_message", "room")
 
 
 admin.site.register(Room, RoomAdmin)

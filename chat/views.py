@@ -1,4 +1,5 @@
-from rest_framework import exceptions, permissions, generics, status
+from django.core.exceptions import ValidationError
+from rest_framework import exceptions, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -40,37 +41,38 @@ class NewMessagesListView(APIView):
     def post(self, request):
         user = request.user
 
-        # room must be of the form [{"id": int, "last_message_id": int}]
-        rooms = request.data.get("rooms")
-        if rooms is None:
-            raise exceptions.ValidationError("Room is required")
+        # room must be of the form [{"room_id": int, "last_read_message": int}]
+        room_list = request.data.get("room_list")
+        if room_list is None:
+            raise exceptions.ValidationError("RoomList is required")
 
-        if len(rooms) == 0:
+        if len(room_list) == 0:
             return Response({})
 
         if not all(
             map(
-                lambda room: room.get("id") is not None
-                and room.get("last_message_id") is not None,
-                rooms,
+                lambda room: room.get("room_id") is not None
+                and room.get("last_message") is not None,
+                room_list,
             )
         ):
             raise exceptions.ValidationError("Invalid Format")
 
         response = {}
 
-        for room in rooms:
-            room_id = room.get("id")
-            last_message_id = room.get("last_message_id")
+        for room in room_list:
+            room_id = room.get("room_id")
+            last_message = room.get("last_message")
             new_messages = (
                 Message.objects.prefetch_related("room")
                 .prefetch_related("room__users")
                 .filter(room=room_id)
-                .filter(id__gt=last_message_id)
+                .filter(id__gt=last_message)
                 .all()
             )
+            # check if current user belongs to the room
             if len(new_messages) > 0 and user not in new_messages[0].room.users.all():
-                raise exceptions.MethodNotAllowed("not your room")
+                raise exceptions.MethodNotAllowed("Not your room")
 
             new_messages = MessageSerializer(new_messages, many=True)
             response[room_id] = new_messages.data
@@ -84,22 +86,29 @@ class MarkAsReadView(APIView):
     def post(self, request):
         user = request.user
 
-        room_id = request.data.get("room")
-        last_message_id = request.data.get("last_message_id")
+        room_id = request.data.get("room_id")
+        last_read_message = request.data.get("last_read_message")
 
-        if not all([room_id, last_message_id]):
+        if not all([room_id, last_read_message]):
             raise exceptions.ValidationError("data not provided")
+
+        room = None
+        message = None
+        try:
+            room = Room.objects.get(pk=room_id)
+            message = Message.objects.get(pk=last_read_message)
+        except (Room.DoesNotExist, Message.DoesNotExist):
+            raise exceptions.NotFound("Room or Message not found")
 
         read_receipt = None
         try:
-            read_receipt = ReadReceipt.objects.get(room=room_id, user=user)
+            read_receipt = ReadReceipt.objects.get(room=room, user=user)
         except ReadReceipt.DoesNotExist:
-            # just for now
-            raise exceptions.NotFound()
+            raise ValidationError("Read Receipt not found")
 
-        # DANGER: JUST FOR NOW
-        message = Message.objects.get(pk=last_message_id)
-
-        read_receipt.last_message = message
+        read_receipt.last_read_message = message.id
         read_receipt.save()
         return Response("done")
+
+
+# TODO: optimise and make code clean for NewMessageListView and MarkAsReadView

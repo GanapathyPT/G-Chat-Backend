@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from rest_framework import serializers
+from rest_framework import exceptions, serializers
 
 from chat.models import Message, ReadReceipt, Room
 from core.serializers import UserDetailSerializer
@@ -35,21 +35,42 @@ class CreateMessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ("id", "content", "author", "room")
 
+    def create(self, validated_data):
+        message = super().create(validated_data)
+        read_receipt = None
+        try:
+            read_receipt = ReadReceipt.objects.get(
+                room=message.room, user=message.author
+            )
+        except ReadReceipt.DoesNotExist:
+            raise exceptions.NotFound("No read receipt found")
+
+        read_receipt.last_read_message = message.id
+        read_receipt.save()
+        return message
+
 
 class RoomSerializer(serializers.ModelSerializer):
-    last_message_id = serializers.SerializerMethodField(required=False)
+    last_read_message = serializers.SerializerMethodField(required=False)
     messages = MessageSerializer(many=True, source="message_set")
     users = UserDetailSerializer(many=True)
 
     class Meta:
         model = Room
-        fields = ("id", "title", "users", "messages", "last_message_id")
+        fields = ("id", "title", "users", "messages", "last_read_message")
 
-    def get_last_message_id(self, room):
+    def get_last_read_message(self, room):
         user = self.context.get("request").user
         read_receipt = None
         try:
             read_receipt = ReadReceipt.objects.get(room=room, user=user)
-            return read_receipt.last_message.id
         except ReadReceipt.DoesNotExist:
-            return -1
+            # if not read receipt with room and user then creating one
+            # last_read_message is -1 as there won't be any messages
+            read_receipt = ReadReceipt()
+            read_receipt.user = user
+            read_receipt.room = room
+            read_receipt.last_read_message = -1
+            read_receipt.save()
+
+        return read_receipt.last_read_message

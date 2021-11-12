@@ -35,7 +35,7 @@ class Message(BaseModel):
 class ReadReceipt(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    last_message = models.ForeignKey(Message, on_delete=models.CASCADE)
+    last_read_message = models.IntegerField()
 
     def __str__(self):
         return str(self.user)
