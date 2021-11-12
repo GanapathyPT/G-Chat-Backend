@@ -33,5 +33,17 @@ class UserDetailView(views.APIView):
         return Response(user_serialized_data.data)
 
 
+class UserSearchView(generics.ListAPIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    serializer_class = UserDetailSerializer
+
+    def get_queryset(self):
+        queryset = []
+        username = self.request.query_params.get("username")
+        if username is not None:
+            queryset = User.objects.filter(username__contains=username)
+        return queryset
+
+
 class TokenObtainPairView_EmailBackend(TokenObtainPairView):
     serializer_class = TokenObtainPairSerializer_EmailBackend
