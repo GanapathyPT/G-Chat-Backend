@@ -15,9 +15,13 @@ class UserRegisterView(generics.CreateAPIView):
     permission_classes = (permissions.AllowAny,)
     serializer_class = UserRegisterSerializer
 
-    def post(self, request, *args, **kwargs):
-        super().post(request, *args, **kwargs)
-        user = self.request.user
+    def create(self, request, *args, **kwargs):
+        # create user with UserRegisterSerializer
+        response = super().create(request, *args, **kwargs)
+        # get the user object
+        user_email = response.data.get("email")
+        user = User.objects.get(email=user_email)
+        # create tokens for the user and return as response
         refresh_token = RefreshToken.for_user(user)
         return Response(
             {"refresh": str(refresh_token), "access": str(refresh_token.access_token)}
