@@ -41,10 +41,10 @@ INSTALLED_APPS = [
     # libraries
     "rest_framework",
     "rest_framework_simplejwt",
-    "whitenoise.runserver_nostatic",
     # custom app
     "core.apps.CoreConfig",
     "chat.apps.ChatConfig",
+    # default
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -132,7 +132,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-STATIC_ROOT = BASE_DIR / "static"
+STATIC_ROOT = BASE_DIR / "assets"
 
 STATICFILES_DIRS = [
     FRONTEND_DIR / "static",
@@ -140,8 +140,9 @@ STATICFILES_DIRS = [
 
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-
 WHITENOISE_ROOT = FRONTEND_DIR / "root"
+
+WHITENOISE_MANIFEST_STRICT = False
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/dev/ref/settings/#default-auto-field
