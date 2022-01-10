@@ -25,7 +25,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
-        fields = ("id", "content", "author")
+        fields = ("id", "content", "author", "created_at")
 
 
 class CreateMessageSerializer(serializers.ModelSerializer):
